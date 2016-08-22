@@ -41,4 +41,55 @@ export default class MicroLDAP {
 
         debug(this.options);
     }
+
+    bind(username, password) {
+        debug(`bind(${username},***`);
+
+        return new Promise((resolve, reject) => {
+            if (!username) {
+                return reject(new Error(`'username' option must be passed`));
+            }
+
+            if (!password) {
+                return reject(new Error(`'password' option must be passed`));
+            }
+
+            let client = ldap.createClient(this.options);
+
+            client.on('connect', () => {
+                debug('connected');
+
+                _bind(client, username, password).then(() => {
+                    debug(`bind success`);
+                    debug(`destroying client`);
+                    client.destroy();
+                    return resolve();
+                }).catch((err) => {
+                    debug(`bind failure`);
+                    debug(`destroying client`);
+                    client.destroy();
+                    return reject(err);
+                });
+            });
+
+            client.on('error', (err) => {
+                return reject(err);
+            });
+        });
+    }
+}
+
+function _bind(client, username, password) {
+    debug(`_debug(${client}, ${username}, ***`);
+
+    return new Promise((resolve, reject) => {
+        client.bind(username, password, (err) => {
+            debug(`client.bind returned`);
+            if (err) {
+                return reject(err);
+            }
+
+            return resolve();
+        });
+    });
 }
