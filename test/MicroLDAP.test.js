@@ -95,7 +95,7 @@ describe('MicroLDAP', () => {
         });
     });
 
-    describe('bind()', () => {
+    describe('functions', () => {
         let ldapStub,
             MicroLDAP,
             microLDAP,
@@ -103,16 +103,17 @@ describe('MicroLDAP', () => {
             mockEmitter,
             sandbox;
 
-        beforeEach(() => {
-            sandbox = sinon.sandbox.create();
+        function resetEmitter() {
             mockEmitter = new EventEmitter;
+            mockEmitter.bind = function () {};
+            mockEmitter.destroy = function () {};
+            mockEmitter.search = function () {};
+        }
 
+        beforeEach(() => {
             ldapStub = {
                 createClient: () => { return mockEmitter; }
             };
-
-            mockEmitter.bind = function () {};
-            mockEmitter.destroy = function () {};
 
             MicroLDAP = proxyquire('../src/MicroLDAP', {
                 'ldapjs': ldapStub,
@@ -125,118 +126,384 @@ describe('MicroLDAP', () => {
             microLDAP = new MicroLDAP(microLDAPOpts);
         });
 
-        afterEach(() => {
-            sandbox.restore();
-        });
-
-        it('should return a Promise', () => {
-            return expect(microLDAP.bind()).to.be.an.instanceOf(Promise);
-        });
-
-        it('should reject if no username is passed', () => {
-            return expect(microLDAP.bind()).to.eventually.be.rejectedWith(`'username' option must be passed`);
-        });
-
-        it('should reject if no password is passed', () => {
-            const username = 'test';
-
-            return expect(microLDAP.bind(username)).to.eventually.be.rejectedWith(`'password' option must be passed`);
-        });
-
-        it('should pass MicroLDAPs options to the LDAP createClient function', () => {
-            const username = 'test',
-                password = 'test';
-
-            let createClientStub = sandbox.stub(ldapStub, 'createClient', () => {
-                return mockEmitter;
-            });
-
-            microLDAP.bind(username, password);
-
-            return expect(createClientStub).to.have.been.calledWith(microLDAP.options);
-        });
-
-        it('should reject if the ldap client emits an error', () => {
-            const expectedError = new Error('test'),
-                username = 'test',
-                password = 'test';
-
-            let createClientStub = sandbox.stub(ldapStub, 'createClient', () => {
-                return mockEmitter;
-            });
-
-            let bindPromise = microLDAP.bind(username, password);
-
-            mockEmitter.emit('error', expectedError);
-
-            return expect(bindPromise).to.eventually.be.rejectedWith(expectedError);
-        });
-
-        describe('after connect', () => {
-            const username = 'test',
-                password = 'test';
-
-            let bindPromise;
-
+        describe('bind()', () => {
             beforeEach(() => {
-                bindPromise = microLDAP.bind(username, password);
+                sandbox = sinon.sandbox.create();
+                resetEmitter();
             });
 
-            it('should perform a bind once the ldap client connects', () => {
-                let bindStub = sandbox.stub(mockEmitter, 'bind');
-
-                mockEmitter.emit('connect');
-
-                return expect(bindStub).to.have.been.called;
+            afterEach(() => {
+                sandbox.restore();
             });
 
-            it('should reject if the ldap bind fails', () => {
-                const expectedError = new Error('test');
+            it('should return a Promise', () => {
+                return expect(microLDAP.bind()).to.be.an.instanceOf(Promise);
+            });
 
-                let bindStub = sandbox.stub(mockEmitter, 'bind', (username, password, callback) => {
-                    callback(expectedError);
+            it('should reject if no username is passed', () => {
+                return expect(microLDAP.bind()).to.eventually.be.rejectedWith(`'username' option must be passed`);
+            });
+
+            it('should reject if no password is passed', () => {
+                const username = 'test';
+
+                return expect(microLDAP.bind(username)).to.eventually.be.rejectedWith(`'password' option must be passed`);
+            });
+
+            it('should pass MicroLDAPs options to the LDAP createClient function', () => {
+                const username = 'test',
+                    password = 'test';
+
+                let createClientStub = sandbox.stub(ldapStub, 'createClient', () => {
+                    return mockEmitter;
                 });
 
-                mockEmitter.emit('connect');
+                microLDAP.bind(username, password);
+
+                return expect(createClientStub).to.have.been.calledWith(microLDAP.options);
+            });
+
+            it('should reject if the ldap client emits an error', () => {
+                const expectedError = new Error('test'),
+                    username = 'test',
+                    password = 'test';
+
+                let createClientStub = sandbox.stub(ldapStub, 'createClient', () => {
+                    return mockEmitter;
+                });
+
+                let bindPromise = microLDAP.bind(username, password);
+
+                mockEmitter.emit('error', expectedError);
 
                 return expect(bindPromise).to.eventually.be.rejectedWith(expectedError);
             });
 
-            it('should destroy the ldap client if the ldap bind fails', () => {
-                let destroyStub = sandbox.stub(mockEmitter, 'destroy');
+            describe('after connect', () => {
+                const username = 'test',
+                    password = 'test';
 
-                let bindStub = sandbox.stub(mockEmitter, 'bind', (username, password, callback) => {
-                    callback(new Error('test'));
+                let bindPromise;
+
+                beforeEach(() => {
+                    sandbox = sinon.sandbox.create();
+                    resetEmitter();
+
+                    bindPromise = microLDAP.bind(username, password);
                 });
 
-                mockEmitter.emit('connect');
+                afterEach(() => {
+                    sandbox.restore();
+                });
 
-                return bindPromise.catch(() => {
-                    return expect(destroyStub).to.have.been.called;
+                it('should perform a bind once the ldap client connects', () => {
+                    let bindStub = sandbox.stub(mockEmitter, 'bind');
+
+                    mockEmitter.emit('connect');
+
+                    return expect(bindStub).to.have.been.called;
+                });
+
+                it('should reject if the ldap bind fails', () => {
+                    const expectedError = new Error('test');
+
+                    let bindStub = sandbox.stub(mockEmitter, 'bind', (username, password, callback) => {
+                        callback(expectedError);
+                    });
+
+                    mockEmitter.emit('connect');
+
+                    return expect(bindPromise).to.eventually.be.rejectedWith(expectedError);
+                });
+
+                it('should destroy the ldap client if the ldap bind fails', () => {
+                    let destroyStub = sandbox.stub(mockEmitter, 'destroy');
+
+                    let bindStub = sandbox.stub(mockEmitter, 'bind', (username, password, callback) => {
+                        callback(new Error('test'));
+                    });
+
+                    mockEmitter.emit('connect');
+
+                    return bindPromise.catch(() => {
+                        return expect(destroyStub).to.have.been.called;
+                    });
+                });
+
+                it('should resolve if the ldap bind succeeds', () => {
+                    let bindStub = sandbox.stub(mockEmitter, 'bind', (username, password, callback) => {
+                        callback();
+                    });
+
+                    mockEmitter.emit('connect');
+
+                    return expect(bindPromise).to.eventually.be.fulfilled;
+                });
+
+                it('should destroy the ldap client if the ldap bind succeeds', () => {
+                    let destroyStub = sandbox.stub(mockEmitter, 'destroy');
+
+                    let bindStub = sandbox.stub(mockEmitter, 'bind', (username, password, callback) => {
+                        callback();
+                    });
+
+                    mockEmitter.emit('connect');
+
+                    return bindPromise.then(() => {
+                        return expect(destroyStub).to.have.been.called;
+                    });
                 });
             });
+        });
 
-            it('should resolve if the ldap bind succeeds', () => {
-                let bindStub = sandbox.stub(mockEmitter, 'bind', (username, password, callback) => {
-                    callback();
-                });
-
-                mockEmitter.emit('connect');
-
-                return expect(bindPromise).to.eventually.be.fulfilled;
+        describe('search()', () => {
+            beforeEach(() => {
+                sandbox = sinon.sandbox.create();
+                resetEmitter();
             });
 
-            it('should destroy the ldap client if the ldap bind succeeds', () => {
-                let destroyStub = sandbox.stub(mockEmitter, 'destroy');
+            afterEach(() => {
+                sandbox.restore();
+            });
 
-                let bindStub = sandbox.stub(mockEmitter, 'bind', (username, password, callback) => {
-                    callback();
+            it('should return a Promise', () => {
+                return expect(microLDAP.search()).to.be.an.instanceOf(Promise);
+            });
+
+            it('should reject if no base parameter is passed', () => {
+                return expect(microLDAP.search()).to.eventually.be.rejectedWith(`'base' option must be passed`);
+            });
+
+            it('should reject if no filter parameter is passed', () => {
+                const base = 'test';
+
+                return expect(microLDAP.search(base)).to.eventually.be.rejectedWith(`'filter' option must be passed`);
+            });
+
+            it('should reject if no attributes parameter is passed', () => {
+                const base = 'test',
+                    filter = 'test';
+
+                return expect(microLDAP.search(base, filter)).to.eventually.be.rejectedWith(`'attributes' option must be passed`);
+            });
+
+            it('should reject if no scope parameter is passed', () => {
+                const base = 'test',
+                    filter = 'test',
+                    attributes = 'test';
+
+                return expect(microLDAP.search(base, filter, attributes)).to.eventually.be.rejectedWith(`'scope' option must be passed`);
+            });
+
+            it('should reject if no username parameter is passed', () => {
+                const base = 'test',
+                    filter = 'test',
+                    attributes = 'test',
+                    scope = 'test';
+
+                return expect(microLDAP.search(base, filter, attributes, scope)).to.eventually.be.rejectedWith(`'username' option must be passed`);
+            });
+
+            it('should reject if no password parameter is passed', () => {
+                const base = 'test',
+                    filter = 'test',
+                    attributes = 'test',
+                    scope = 'test',
+                    username = 'test';
+
+                return expect(microLDAP.search(base, filter, attributes, scope, username)).to.eventually.be.rejectedWith(`'password' option must be passed`);
+            });
+
+            it('should pass MicroLDAPs options to the LDAP createClient function', () => {
+                const base = 'test',
+                    filter = 'test',
+                    attributes = 'test',
+                    scope = 'test',
+                    username = 'test',
+                    password = 'test';
+
+                let createClientStub = sandbox.stub(ldapStub, 'createClient', () => {
+                    return mockEmitter;
                 });
 
-                mockEmitter.emit('connect');
+                microLDAP.search(base, filter, attributes, scope, username, password);
 
-                return bindPromise.then(() => {
-                    return expect(destroyStub).to.have.been.called;
+                return expect(createClientStub).to.have.been.calledWith(microLDAP.options);
+            });
+
+            it('should reject if the ldap client emits an error', () => {
+                const expectedError = new Error('test'),
+                    base = 'test',
+                    filter = 'test',
+                    attributes = 'test',
+                    scope = 'test',
+                    username = 'test',
+                    password = 'test';
+
+                let createClientStub = sandbox.stub(ldapStub, 'createClient', () => {
+                    return mockEmitter;
+                });
+
+                let searchPromise = microLDAP.search(base, filter, attributes, scope, username, password);
+
+                mockEmitter.emit('error', expectedError);
+
+                return expect(searchPromise).to.eventually.be.rejectedWith(expectedError);
+            });
+
+            describe('after connect', () => {
+                const base = 'test',
+                    filter = 'test',
+                    attributes = 'test',
+                    scope = 'test',
+                    username = 'test',
+                    password = 'test';
+
+                let searchPromise;
+
+                beforeEach(() => {
+                    sandbox = sinon.sandbox.create();
+                    resetEmitter();
+
+                    searchPromise = microLDAP.search(base, filter, attributes, scope, username, password);
+                });
+
+                afterEach(() => {
+                    sandbox.restore();
+                });
+
+                it('should perform a bind once the ldap client connects', () => {
+                    let bindStub = sandbox.stub(mockEmitter, 'bind');
+
+                    mockEmitter.emit('connect');
+
+                    return expect(bindStub).to.have.been.called;
+                });
+
+                it('should reject if the ldap bind fails', () => {
+                    const expectedError = new Error('test');
+
+                    let bindStub = sandbox.stub(mockEmitter, 'bind', (username, password, callback) => {
+                        callback(expectedError);
+                    });
+
+                    mockEmitter.emit('connect');
+
+                    return expect(searchPromise).to.eventually.be.rejectedWith(expectedError);
+                });
+
+                it('should destroy the ldap client if the ldap bind fails', () => {
+                    let destroyStub = sandbox.stub(mockEmitter, 'destroy');
+
+                    let bindStub = sandbox.stub(mockEmitter, 'bind', (username, password, callback) => {
+                        callback(new Error('test'));
+                    });
+
+                    mockEmitter.emit('connect');
+
+                    return searchPromise.catch(() => {
+                        return expect(destroyStub).to.have.been.called;
+                    });
+                });
+
+                it('should call search on the ldap client if the bind succeeds', (done) => {
+                    let searchStub = sandbox.stub(mockEmitter, 'search', (base, opts, callback) => {
+                        expect(searchStub).to.have.been.called;
+                        done();
+                    });
+
+                    let bindStub = sandbox.stub(mockEmitter, 'bind', (username, password, callback) => {
+                        callback();
+                    });
+
+                    mockEmitter.emit('connect');
+                });
+
+                it('should reject if the ldap search fails', () => {
+                    let expectedError = new Error('test');
+
+                    let searchStub = sandbox.stub(mockEmitter, 'search', (base, opts, callback) => {
+                        callback(expectedError);
+                    });
+
+                    let bindStub = sandbox.stub(mockEmitter, 'bind', (username, password, callback) => {
+                        callback();
+                    });
+
+                    mockEmitter.emit('connect');
+
+                    return expect(searchPromise).to.eventually.be.rejectedWith(expectedError);
+                });
+
+                it('should reject if the ldap search results in non-zero status', () => {
+                    let res = new EventEmitter();
+
+                    let result = {
+                        status: -1
+                    };
+
+                    let searchStub = sandbox.stub(mockEmitter, 'search', (base, opts, callback) => {
+                        callback(null, res);
+                        res.emit('end', result);
+                    });
+
+                    let bindStub = sandbox.stub(mockEmitter, 'bind', (username, password, callback) => {
+                        callback();
+                    });
+
+                    mockEmitter.emit('connect');
+
+                    return expect(searchPromise).to.eventually.be.rejectedWith('LDAP search ended with non-0 status');
+                });
+
+                it('should resolve with all the results from the search', () => {
+                    let res = new EventEmitter();
+
+                    let result = {
+                        status: 0
+                    };
+
+                    let searchStub = sandbox.stub(mockEmitter, 'search', (base, opts, callback) => {
+                        callback(null, res);
+                        res.emit('end', result);
+                    });
+
+                    let bindStub = sandbox.stub(mockEmitter, 'bind', (username, password, callback) => {
+                        callback();
+                    });
+
+                    mockEmitter.emit('connect');
+
+                    return expect(searchPromise).to.eventually.deep.equal([]);
+                });
+
+                it('should store all the results from the search', () => {
+                    let res = new EventEmitter();
+
+                    let result = {
+                        status: 0
+                    };
+
+                    let entry1 = 1,
+                        entry2 = 2,
+                        entry3 = 3;
+
+                    let searchStub = sandbox.stub(mockEmitter, 'search', (base, opts, callback) => {
+                        callback(null, res);
+
+                        res.emit('searchEntry', entry1);
+                        res.emit('searchEntry', entry2);
+                        res.emit('searchEntry', entry3);
+                        res.emit('end', result);
+                    });
+
+                    let bindStub = sandbox.stub(mockEmitter, 'bind', (username, password, callback) => {
+                        callback();
+                    });
+
+                    mockEmitter.emit('connect');
+
+                    return expect(searchPromise).to.eventually.deep.equal([entry1, entry2, entry3]);
                 });
             });
         });
