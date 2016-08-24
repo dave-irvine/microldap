@@ -24,7 +24,12 @@
     "sinon-chai": "^2.8.0"
   },
   "scripts": {
-    "test": "mocha --compilers js:babel-core/register"
+    "prepublish": "npm test && npm run build && git diff --exit-code --quiet",
+    "preversion": "npm test && npm run build && git diff --exit-code --quiet",
+    "postversion": "git push && git push --tags",
+    "pretest": "eslint src/",
+    "test": "mocha --compilers js:babel-core/register",
+    "build": "babel src --out-dir lib"
   },
   "keywords": [
     "ldap"
