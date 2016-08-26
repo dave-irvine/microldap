@@ -505,6 +505,31 @@ describe('MicroLDAP', () => {
 
                     return expect(searchPromise).to.eventually.deep.equal([entry1, entry2, entry3]);
                 });
+
+                it('should destroy the ldap client once the search completes', () => {
+                    let res = new EventEmitter();
+
+                    let result = {
+                        status: 0
+                    };
+
+                    let searchStub = sandbox.stub(mockEmitter, 'search', (base, opts, callback) => {
+                        callback(null, res);
+                        res.emit('end', result);
+                    });
+
+                    let destroyStub = sandbox.stub(mockEmitter, 'destroy');
+
+                    let bindStub = sandbox.stub(mockEmitter, 'bind', (username, password, callback) => {
+                        callback();
+                    });
+
+                    mockEmitter.emit('connect');
+
+                    return searchPromise.then(() => {
+                        return expect(destroyStub).to.have.been.called;
+                    });
+                });
             });
         });
     });

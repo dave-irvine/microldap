@@ -132,6 +132,9 @@ export default class MicroLDAP {
 
                     res.on('end', (result) => {
                         debug(`search end`);
+                        debug(`destroying client`);
+
+                        client.destroy();
 
                         if (result.status === 0) {
                             return resolve(entries);
