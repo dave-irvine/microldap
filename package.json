@@ -1,6 +1,6 @@
 {
   "name": "microldap",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Bind and search for LDAP",
   "main": "index.js",
   "dependencies": {
